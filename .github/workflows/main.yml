@@ -1,17 +1,98 @@
 name: Run Windows VM (Free for Students)
 
 on:
-  workflow_dispatch: # تشغيل السيرفر يدوياً في أي وقت بضغطة زر واحدة
+  workflow_dispatch: # تشغيل السيرفر يدوياً بضغطة زر واحدة في أي وقت
 
 jobs:
   run-windows:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+      - name: Prepare Environment and Install QEMU
+        run: |
+          echo "🛠 جاري تجهيز وإعداد سيرفر الويندوز التعليمي للاختبارات..."
+          sudo rm -f /etc/apt/sources.list.d/*.list || true
+          sudo apt-get update -y || true
+          sudo apt-get install -y qemu-system-x86 novnc websockify wget curl ssh -y
 
-      - name: Make Script Executable
-        run: chmod +x start_server.sh
+      - name: Download Windows Image
+        run: |
+          if [ ! -f storage.qcow2 ]; then
+              echo "📥 جاري تحميل نظام الويندوز المخصص (قد يستغرق بضع دقائق)..."
+              wget -c -O storage.qcow2 "https://huggingface.co/datasets/Hrbacgq/WINDOWSISO/resolve/main/storage_final.qcow2"
+          else
+              echo "✅ ملف نظام الويندوز الخاص بك جاهز وموجود بالفعل."
+          fi
 
-      - name: Start Free Windows Server
-        run: ./start_server.sh
+      - name: Start Web VNC (noVNC)
+        run: |
+          echo "📡 تشغيل خادم VNC المحلي..."
+          sudo pkill -f websockify || true
+          nohup websockify --web /usr/share/novnc/ 6080 localhost:5900 > /dev/null 2>&1 &
+
+      - name: Run Windows OS inside QEMU
+        run: |
+          echo "🚀 جاري إقلاع نظام الويندوز الآن..."
+          sudo pkill -f qemu-system-x86_64 || true
+          
+          # إعدادات QEMU مع توجيه منفذ RDP الافتراضي (3389) ومنفذ VNC الافتراضي (5900)
+          QEMU_ARGS="-m 4G -smp cores=2,threads=2 -drive file=storage.qcow2,format=qcow2,cache=writeback,discard=on -net nic,model=e1000 -net user,hostfwd=tcp::3389-:3389,hostfwd=tcp::5900-:5900 -vga std -vnc :0 -usb -device usb-tablet -daemonize -audio none"
+          
+          if [ -e /dev/kvm ]; then
+              echo "⚡ تم تفعيل التسريع العتادي KVM بنجاح! السيرفر سيعمل بأعلى كفاءة لطلابك."
+              sudo qemu-system-x86_64 $QEMU_ARGS -enable-kvm -cpu host
+          else
+              echo "⚠️ تقنية KVM غير متاحة، يتم الإقلاع بالمحاكاة العادية."
+              sudo qemu-system-x86_64 $QEMU_ARGS
+          fi
+
+      - name: Start Free Tunnels and Print Connection Info
+        run: |
+          echo "📡 جاري تفعيل نفق الاتصال الخارجي المجاني (بدون تسجيل حساب)..."
+          
+          # تفعيل نفق لمنفذ RDP (3389) عبر خادم Serveo المجاني للحصول على IP ومنفذ خارجي للتحكم عن بعد
+          nohup ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 -R 0:localhost:3389 serveo.net > rdp_tunnel.log 2>&1 &
+          
+          # تفعيل نفق لمنفذ noVNC (6080) لمن يريد الاتصال الفوري عبر المتصفح
+          nohup ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 -R 0:localhost:6080 serveo.net > http_tunnel.log 2>&1 &
+          
+          sleep 12 # انتظار توليد الخادم للمنافذ المفتوحة
+          
+          # استخراج العناوين والروابط من سجلات التفعيل
+          RDP_CONN=$(grep -o 'serveo.net:[0-9]*' rdp_tunnel.log | head -n 1 || echo "")
+          HTTP_CONN=$(grep -o 'https://[^ ]*' http_tunnel.log | head -n 1 || echo "")
+          
+          # جلب الـ IP العام الفعلي لبيئة تشغيل السيرفر
+          PUBLIC_IP=$(curl -s https://api.ipify.org || echo "تعذر جلب الـ IP")
+          
+          # طباعة النتيجة النهائية الاحترافية للطلاب بشكل واضح وصريح
+          echo "================================================================"
+          echo "         🌟 تهانينا! معمل نظام الويندوز الخاص بك جاهز للعمل الآن 🌟"
+          echo "================================================================"
+          echo ""
+          echo "🖥️ بيانات الدخول عن بعد الخاصة بالطلاب والاتصال بالمكتب (RDP):"
+          echo "----------------------------------------------------------------"
+          if [ -n "$RDP_CONN" ]; then
+              echo "📌 عنوان السيرفر (IP/Address):  $RDP_CONN"
+          else
+              echo "📌 عنوان السيرفر (IP/Address):  $PUBLIC_IP:3389"
+          fi
+          echo "👤 اسم المستخدم لـ Windows:  Administrator"
+          echo "🔑 كلمة السر المفتوحة (Password): 123456  # (أو كلمة سر نسختك الافتراضية إذا غيرتها)"
+          echo "----------------------------------------------------------------"
+          echo ""
+          echo "🌐 أو الاتصال المباشر عن بعد عبر المتصفح (Web Controller):"
+          echo "----------------------------------------------------------------"
+          if [ -n "$HTTP_CONN" ]; then
+              echo "🔗 رابط المتصفح المباشر (noVNC):"
+              echo "👉 $HTTP_CONN/vnc.html?autoconnect=true"
+          else
+              echo "🔗 رابط المتصفح المباشر (noVNC): (محلي عبر المنفذ 6080)"
+          fi
+          echo "================================================================"
+          echo "⏳ السيرفر قيد التشغيل والعمل الآن... لا تغلق الطرفية لمواصلة تجارب الطلاب."
+          echo "================================================================"
+          
+          # إبقاء السيرفر في وضع التشغيل المستمر
+          while true; do
+              sleep 60
+          done
