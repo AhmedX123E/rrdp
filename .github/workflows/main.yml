@@ -1,0 +1,17 @@
+name: Run Windows VM (Free for Students)
+
+on:
+  workflow_dispatch: # تشغيل السيرفر يدوياً في أي وقت بضغطة زر واحدة
+
+jobs:
+  run-windows:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Make Script Executable
+        run: chmod +x start_server.sh
+
+      - name: Start Free Windows Server
+        run: ./start_server.sh
