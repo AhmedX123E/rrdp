@@ -45,58 +45,48 @@ jobs:
               sudo qemu-system-x86_64 $QEMU_ARGS
           fi
 
-      - name: Start Free Tunnels and Print Connection Info
+      - name: Start Free Tunnels (tmate)
         run: |
-          echo "📡 جاري تفعيل نفق الاتصال الخارجي المجاني (بدون تسجيل حساب)..."
+          echo "📥 جاري تشغيل خادم tmate المشفر والمفتوح لتخطي الحماية بالكامل..."
+          sudo apt-get install -y tmate
           
-          # تفعيل نفق لمنفذ RDP (3389) عبر خادم Serveo المجاني للحصول على IP ومنفذ خارجي للتحكم عن بعد
-          # تم إضافة خيارات إضافية لضمان ثبات الاتصال وموثوقيته وتخطي الفحص الأمني لـ Serveo
-          nohup ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=5 -R 0:localhost:3389 serveo.net > rdp_tunnel.log 2>&1 &
+          # إنشاء مفاتيح مشفرة لتخطي أي جدار حماية
+          [ -f ~/.ssh/id_rsa ] || ssh-keygen -q -t rsa -N "" -f ~/.ssh/id_rsa
           
-          # تفعيل نفق لمنفذ noVNC (6080) لمن يريد الاتصال الفوري عبر المتصفح
-          nohup ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=5 -R 0:localhost:6080 serveo.net > http_tunnel.log 2>&1 &
+          # تشغيل الجلسة وتسجيلها
+          tmate -S /tmp/tmate.sock new-session -d
+          tmate -S /tmp/tmate.sock wait-active
           
-          sleep 15 # انتظار كافٍ لتوليد الاتصال واستلام العناوين
+          # استخراج رابط الويب ورابط الـ SSH المباشر لـ tmate
+          TMATE_SSH=$(tmate -S /tmp/tmate.sock display -p '#{tmate_ssh}')
+          TMATE_WEB=$(tmate -S /tmp/tmate.sock display -p '#{tmate_web}')
           
-          # استخراج العناوين والروابط من سجلات التفعيل
-          RDP_CONN=$(grep -o 'serveo.net:[0-9]*' rdp_tunnel.log | head -n 1 || echo "")
-          HTTP_CONN=$(grep -o 'https://[^ ]*' http_tunnel.log | head -n 1 || echo "")
+          # تنظيف وعزل البيانات لتوليد أمر جاهز تماماً للنسخ
+          CLEAN_SSH=$(echo "$TMATE_SSH" | sed 's/ssh //')
           
-          # جلب الـ IP العام الفعلي لبيئة تشغيل السيرفر
-          PUBLIC_IP=$(curl -s https://api.ipify.org || echo "تعذر جلب الـ IP")
-          
-          # طباعة النتيجة النهائية الاحترافية للطلاب بشكل واضح وصريح
           echo "================================================================"
           echo "         🌟 تهانينا! معمل نظام الويندوز الخاص بك جاهز للعمل الآن 🌟"
           echo "================================================================"
           echo ""
-          echo "🖥️ بيانات الدخول عن بعد الخاصة بالطلاب والاتصال بالمكتب (RDP):"
+          echo "🖥️ الطريقة المضمونة والنهائية للتحكم عن بعد (Remote Control / RDP) لطلابك:"
           echo "----------------------------------------------------------------"
-          
-          # إذا استجاب خادم Serveo وأعطانا عنواناً خارجياً، سنقوم بطباعته فوراً
-          if [ -n "$RDP_CONN" ]; then
-              echo "📌 عنوان السيرفر الخارجي (RDP Address):  $RDP_CONN"
-              echo "💡 (انسخ هذا العنوان بالكامل وضعه في برنامج Remote Desktop لجهازك)"
-          else
-              # في حال لم يستجب نفق Serveo بسبب الضغط، يتم توجيه الطلاب للاتصال بالـ IP العام مباشرة
-              echo "📌 عنوان السيرفر البديل (Public IP):  $PUBLIC_IP:3389"
-              echo "⚠️ تنبيه: إذا لم ينجح الاتصال بالـ IP العام، يرجى إعادة تشغيل السيرفر (Re-run) للحصول على عنوان Serveo جديد ونظيف."
-          fi
-          
+          echo "لتخطي أي جدار حماية (Firewall) في العالم وبدون الحاجة لفتح أي منافذ:"
+          echo ""
+          echo "👉 خطوة 1: اطلب من الطلاب فتح الـ CMD (Command Prompt) ولصق هذا الأمر الصريح واضغط Enter:"
+          echo "   ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -NL 33890:localhost:3389 $CLEAN_SSH"
+          echo ""
+          echo "👉 خطوة 2: اترك شاشة الـ CMD مفتوحة جانباً (لا تغلقها)، وافتح برنامج Remote Desktop Connection."
+          echo "👉 خطوة 3: في خانة الكمبيوتر (Computer) اكتب العنوان التالي بالضبط:"
+          echo "   127.0.0.1:33890"
+          echo ""
           echo "👤 اسم المستخدم لـ Windows:  Administrator"
-          echo "🔑 كلمة السر المفتوحة (Password): 123456  # (أو كلمة سر نسختك الافتراضية إذا غيرتها)"
+          echo "🔑 كلمة السر المفتوحة (Password): 123456"
           echo "----------------------------------------------------------------"
           echo ""
-          echo "🌐 أو الاتصال المباشر عن بعد عبر المتصفح (Web Controller):"
-          echo "----------------------------------------------------------------"
-          if [ -n "$HTTP_CONN" ]; then
-              echo "🔗 رابط المتصفح المباشر (noVNC):"
-              echo "👉 $HTTP_CONN/vnc.html?autoconnect=true"
-          else
-              echo "🔗 رابط المتصفح المباشر (noVNC): (محلي عبر المنفذ 6080)"
-          fi
+          echo "🌐 لمراقبة السيرفر والطرفية بشكل حي من المتصفح (للأستاذ):"
+          echo "🔗 رابط الويب لـ tmate: $TMATE_WEB"
           echo "================================================================"
-          echo "⏳ السيرفر قيد التشغيل والعمل الآن... لا تغلق الطرفية لمواصلة تجارب الطلاب."
+          echo "⏳ السيرفر قيد التشغيل والعمل الآن..."
           echo "================================================================"
           
           # إبقاء السيرفر في وضع التشغيل المستمر
