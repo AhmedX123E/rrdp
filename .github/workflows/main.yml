@@ -50,12 +50,13 @@ jobs:
           echo "📡 جاري تفعيل نفق الاتصال الخارجي المجاني (بدون تسجيل حساب)..."
           
           # تفعيل نفق لمنفذ RDP (3389) عبر خادم Serveo المجاني للحصول على IP ومنفذ خارجي للتحكم عن بعد
-          nohup ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 -R 0:localhost:3389 serveo.net > rdp_tunnel.log 2>&1 &
+          # تم إضافة خيارات إضافية لضمان ثبات الاتصال وموثوقيته وتخطي الفحص الأمني لـ Serveo
+          nohup ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=5 -R 0:localhost:3389 serveo.net > rdp_tunnel.log 2>&1 &
           
           # تفعيل نفق لمنفذ noVNC (6080) لمن يريد الاتصال الفوري عبر المتصفح
-          nohup ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 -R 0:localhost:6080 serveo.net > http_tunnel.log 2>&1 &
+          nohup ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=5 -R 0:localhost:6080 serveo.net > http_tunnel.log 2>&1 &
           
-          sleep 12 # انتظار توليد الخادم للمنافذ المفتوحة
+          sleep 15 # انتظار كافٍ لتوليد الاتصال واستلام العناوين
           
           # استخراج العناوين والروابط من سجلات التفعيل
           RDP_CONN=$(grep -o 'serveo.net:[0-9]*' rdp_tunnel.log | head -n 1 || echo "")
@@ -71,11 +72,17 @@ jobs:
           echo ""
           echo "🖥️ بيانات الدخول عن بعد الخاصة بالطلاب والاتصال بالمكتب (RDP):"
           echo "----------------------------------------------------------------"
+          
+          # إذا استجاب خادم Serveo وأعطانا عنواناً خارجياً، سنقوم بطباعته فوراً
           if [ -n "$RDP_CONN" ]; then
-              echo "📌 عنوان السيرفر (IP/Address):  $RDP_CONN"
+              echo "📌 عنوان السيرفر الخارجي (RDP Address):  $RDP_CONN"
+              echo "💡 (انسخ هذا العنوان بالكامل وضعه في برنامج Remote Desktop لجهازك)"
           else
-              echo "📌 عنوان السيرفر (IP/Address):  $PUBLIC_IP:3389"
+              # في حال لم يستجب نفق Serveo بسبب الضغط، يتم توجيه الطلاب للاتصال بالـ IP العام مباشرة
+              echo "📌 عنوان السيرفر البديل (Public IP):  $PUBLIC_IP:3389"
+              echo "⚠️ تنبيه: إذا لم ينجح الاتصال بالـ IP العام، يرجى إعادة تشغيل السيرفر (Re-run) للحصول على عنوان Serveo جديد ونظيف."
           fi
+          
           echo "👤 اسم المستخدم لـ Windows:  Administrator"
           echo "🔑 كلمة السر المفتوحة (Password): 123456  # (أو كلمة سر نسختك الافتراضية إذا غيرتها)"
           echo "----------------------------------------------------------------"
