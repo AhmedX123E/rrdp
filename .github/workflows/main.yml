@@ -53,9 +53,12 @@ jobs:
           # إنشاء مفاتيح مشفرة لتخطي أي جدار حماية
           [ -f ~/.ssh/id_rsa ] || ssh-keygen -q -t rsa -N "" -f ~/.ssh/id_rsa
           
-          # تشغيل الجلسة وتسجيلها
+          # تشغيل الجلسة وتسجيلها في الخلفية
           tmate -S /tmp/tmate.sock new-session -d
-          tmate -S /tmp/tmate.sock wait-active
+          
+          echo "🔄 انتظار تفعيل خادم الاتصال والحصول على الرابط..."
+          # الأمر الصحيح والمدعوم في كل نسخ tmate للانتظار حتى الربط بالخادم
+          tmate -S /tmp/tmate.sock wait tmate-ready
           
           # استخراج رابط الويب ورابط الـ SSH المباشر لـ tmate
           TMATE_SSH=$(tmate -S /tmp/tmate.sock display -p '#{tmate_ssh}')
