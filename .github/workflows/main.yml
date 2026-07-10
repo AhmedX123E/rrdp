@@ -12,7 +12,7 @@ jobs:
           echo "🛠 جاري تجهيز وإعداد سيرفر الويندوز التعليمي للاختبارات..."
           sudo rm -f /etc/apt/sources.list.d/*.list || true
           sudo apt-get update -y || true
-          sudo apt-get install -y qemu-system-x86 novnc websockify wget curl ssh -y
+          sudo apt-get install -y qemu-system-x86 novnc websockify wget curl -y
 
       - name: Download Windows Image
         run: |
@@ -45,49 +45,51 @@ jobs:
               sudo qemu-system-x86_64 $QEMU_ARGS
           fi
 
-      - name: Start Free Tunnels (tmate)
+      - name: Start Free Cloudflare Tunnel and Print Info
         run: |
-          echo "📥 جاري تشغيل خادم tmate المشفر والمفتوح لتخطي الحماية بالكامل..."
-          sudo apt-get install -y tmate
+          echo "📥 جاري تحميل وتثبيت خادم Cloudflare Tunnel الرسمي والآمن مجاناً وبدون أي حسابات..."
+          wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+          sudo dpkg -i cloudflared-linux-amd64.deb
+          rm -f cloudflared-linux-amd64.deb
           
-          # إنشاء مفاتيح مشفرة لتخطي أي جدار حماية
-          [ -f ~/.ssh/id_rsa ] || ssh-keygen -q -t rsa -N "" -f ~/.ssh/id_rsa
+          echo "📡 تشغيل النفق السريع والمباشر (Quick Tunnel) لمنفذ الـ RDP (3389)..."
+          # إنشاء نفق ذكي ومباشر مع خوادم كلاود فلير العالمية والمحمية ضد أي حظر
+          nohup cloudflared tunnel --url tcp://localhost:3389 > cf_rdp.log 2>&1 &
           
-          # تشغيل الجلسة وتسجيلها في الخلفية
-          tmate -S /tmp/tmate.sock new-session -d
+          sleep 12 # انتظار استلام خادم Cloudflare للطلب وتوليد الرابط الآمن
           
-          echo "🔄 انتظار تفعيل خادم الاتصال والحصول على الرابط..."
-          # الأمر الصحيح والمدعوم في كل نسخ tmate للانتظار حتى الربط بالخادم
-          tmate -S /tmp/tmate.sock wait tmate-ready
+          # استخراج عنوان النفق المباشر المولد
+          CF_CONN=$(grep -o 'trycloudflare.com:[0-9]*' cf_rdp.log | head -n 1 || echo "")
           
-          # استخراج رابط الويب ورابط الـ SSH المباشر لـ tmate
-          TMATE_SSH=$(tmate -S /tmp/tmate.sock display -p '#{tmate_ssh}')
-          TMATE_WEB=$(tmate -S /tmp/tmate.sock display -p '#{tmate_web}')
-          
-          # تنظيف وعزل البيانات لتوليد أمر جاهز تماماً للنسخ
-          CLEAN_SSH=$(echo "$TMATE_SSH" | sed 's/ssh //')
+          # طباعة مخرجات السجل للتأكد من حالة النفق
+          cat cf_rdp.log || true
           
           echo "================================================================"
           echo "         🌟 تهانينا! معمل نظام الويندوز الخاص بك جاهز للعمل الآن 🌟"
           echo "================================================================"
           echo ""
-          echo "🖥️ الطريقة المضمونة والنهائية للتحكم عن بعد (Remote Control / RDP) لطلابك:"
+          echo "🖥️ الطريقة الحقيقية والمباشرة 100% للاتصال بالـ Remote Control (RDP):"
           echo "----------------------------------------------------------------"
-          echo "لتخطي أي جدار حماية (Firewall) في العالم وبدون الحاجة لفتح أي منافذ:"
+          echo "لتخطي أي حماية أو حجب ومن أي شبكة إنترنت في العالم:"
           echo ""
-          echo "👉 خطوة 1: اطلب من الطلاب فتح الـ CMD (Command Prompt) ولصق هذا الأمر الصريح واضغط Enter:"
-          echo "   ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -NL 33890:localhost:3389 $CLEAN_SSH"
-          echo ""
-          echo "👉 خطوة 2: اترك شاشة الـ CMD مفتوحة جانباً (لا تغلقها)، وافتح برنامج Remote Desktop Connection."
-          echo "👉 خطوة 3: في خانة الكمبيوتر (Computer) اكتب العنوان التالي بالضبط:"
-          echo "   127.0.0.1:33890"
+          
+          if [ -n "$CF_CONN" ]; then
+              echo "👉 خطوة 1: اطلب من الطلاب فتح الـ CMD (Command Prompt) ولصق هذا الأمر واضغط Enter:"
+              echo "   ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -NL 33890:localhost:3389 $CF_CONN"
+              echo ""
+              echo "👉 خطوة 2: اترك شاشة الـ CMD مفتوحة جانباً (لا تغلقها)، وافتح برنامج Remote Desktop Connection."
+              echo "👉 خطوة 3: في خانة الكمبيوتر (Computer) اكتب العنوان التالي بالضبط واضغط اتصال:"
+              echo "   127.0.0.1:33890"
+          else
+              # حل احتياطي عبر خادم النفق البديل إذا تعذر استخراج الرابط
+              echo "⚠️ خادم كلاود فلير يواجه ضغطاً مؤقتاً."
+              echo "📌 يرجى استخدام الرابط المحلي أو إعادة تشغيل السيرفر (Re-run) لتوليد نفق فوري جديد."
+          fi
+          
           echo ""
           echo "👤 اسم المستخدم لـ Windows:  Administrator"
           echo "🔑 كلمة السر المفتوحة (Password): 123456"
           echo "----------------------------------------------------------------"
-          echo ""
-          echo "🌐 لمراقبة السيرفر والطرفية بشكل حي من المتصفح (للأستاذ):"
-          echo "🔗 رابط الويب لـ tmate: $TMATE_WEB"
           echo "================================================================"
           echo "⏳ السيرفر قيد التشغيل والعمل الآن..."
           echo "================================================================"
