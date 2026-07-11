@@ -1,0 +1,42 @@
+name: Linux Desktop + VNC (GitHub Actions)
+
+on:
+  workflow_dispatch:   # تشغيل يدوي من تبويب Actions
+
+jobs:
+  vnc-desktop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360   # يبقى يعمل حتى 6 ساعات
+
+    steps:
+      - name: Update system
+        run: sudo apt update -y && sudo apt upgrade -y
+
+      - name: Install XFCE + VNC + noVNC
+        run: |
+          sudo apt install -y \
+            xfce4 xfce4-goodies \
+            x11vnc xvfb \
+            novnc websockify \
+            dbus-x11
+
+      - name: Setup VNC password
+        run: |
+          mkdir -p ~/.vnc
+          echo "123456" | vncpasswd -f > ~/.vnc/passwd
+          chmod 600 ~/.vnc/passwd
+
+      - name: Start Linux Desktop + VNC
+        run: |
+          export DISPLAY=:1
+          Xvfb :1 -screen 0 1280x800x24 &
+          sleep 3
+          startxfce4 &
+          x11vnc -display :1 -forever -shared -rfbport 5900 -passwd 123456 -bg
+          websockify --web=/usr/share/novnc/ 6080 localhost:5900 &
+
+      - name: Keep session alive
+        run: |
+          echo "✅ Linux Desktop + VNC is running!"
+          echo "Access via: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          sleep infinity
